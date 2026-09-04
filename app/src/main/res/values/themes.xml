@@ -1,0 +1,11 @@
+<resources>
+    <!-- The actual look & feel is driven by Compose (see ui/theme/Theme.kt).
+         This base theme just makes sure the window itself (splash background,
+         status bar before Compose takes over) already looks dark. -->
+    <style name="Theme.GivyDownloader" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/givy_background</item>
+        <item name="android:statusBarColor">@color/givy_background</item>
+        <item name="android:navigationBarColor">@color/givy_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

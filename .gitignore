@@ -1,0 +1,21 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Keep the wrapper jar, ignore downloaded distributions
+!gradle/wrapper/gradle-wrapper.jar
+
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Log/cache
+*.log
