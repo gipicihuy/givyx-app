@@ -1,5 +1,15 @@
 package com.givy.downloader.scraper
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import org.jsoup.Jsoup
+import java.util.concurrent.TimeUnit
+
 /**
  * Contract the rest of the app (UI + downloader) talks to.
  *
@@ -22,70 +32,118 @@ interface TikTokScraper {
 }
 
 /**
- * ============================================================================
- *  PASTE YOUR OWN TIKTOK SCRAPER HERE
- * ============================================================================
- *
- * This is the single integration point for your scraper. Replace the body of
- * [resolve] below with your own logic (API call, HTML parsing, headless
- * client, whatever you use). You do NOT need to touch any other file in this
- * project — [MainActivity]/[com.givy.downloader.viewmodel.DownloadViewModel]
- * already call this class through the [TikTokScraper] interface above.
- *
- * Requirements for whatever you put here:
- *   1. It must be a `suspend` function (do network/parsing work with
- *      coroutines — e.g. wrap blocking calls in `withContext(Dispatchers.IO)`).
- *   2. On success, return `ScraperResult.Success(mediaUrl = "...")` with a
- *      direct URL that a plain HTTP GET can download (no extra auth headers
- *      needed downstream — resolve those yourself before returning, or extend
- *      ScraperResult if you need to pass custom headers through).
- *   3. On failure, return `ScraperResult.Error("readable message")` instead of
- *      throwing — the UI reads this directly and shows it to the user.
- *   4. If your scraper needs a secret (API key, PAT, cookie, etc.), do NOT
- *      hardcode it here. See the "Secrets" note below.
- *
- * --------------------------------------------------------------------------
- * Secrets / credentials your scraper needs (API keys, tokens, cookies, etc.):
- *   - NEVER commit them as string literals in this file.
- *   - Put them in `local.properties` (already git-ignored) as e.g.
- *         TIKTOK_SCRAPER_TOKEN=xxxxx
- *     then read them via BuildConfig — add this to app/build.gradle.kts:
- *
- *         val localProps = java.util.Properties().apply {
- *             val f = rootProject.file("local.properties")
- *             if (f.exists()) load(f.inputStream())
- *         }
- *         android {
- *             defaultConfig {
- *                 buildConfigField(
- *                     "String", "TIKTOK_SCRAPER_TOKEN",
- *                     "\"${localProps.getProperty("TIKTOK_SCRAPER_TOKEN", "")}\""
- *                 )
- *             }
- *             buildFeatures { buildConfig = true }
- *         }
- *
- *     Then use `BuildConfig.TIKTOK_SCRAPER_TOKEN` down here.
- *   - For CI (GitHub Actions), add the same value as a repository Secret and
- *     write it into local.properties (or pass as a Gradle -P property) in a
- *     build step — never put it directly in the workflow YAML or commit it.
- * ============================================================================
+ * One downloadable option returned by TikTokIO for a given video (there's
+ * usually a watermark version, an HD/no-watermark version, and an audio-only
+ * version).
  */
-class YourTikTokScraper : TikTokScraper {
-    override suspend fun resolve(tiktokUrl: String): ScraperResult {
-        // TODO: replace with your real implementation.
-        return ScraperResult.Error(
-            "Scraper belum diisi. Tempel implementasi kamu di " +
-                "YourTikTokScraper.resolve() (file TikTokScraper.kt)."
-        )
+private data class MediaOption(
+    val quality: String,   // "HD" | "Normal" | "Watermark"
+    val type: String,      // "video" | "audio"
+    val label: String,
+    val url: String
+)
+
+/**
+ * Scraper backed by tiktokio.com's public resolver endpoint.
+ *
+ * Ported from a Node.js script (node-fetch + cheerio) to Kotlin
+ * (OkHttp + Jsoup, the JVM equivalent of cheerio) so it can run natively
+ * inside the Android app without a JS runtime.
+ * Original script credit: febry.is-a.dev (github: vandebry10-star).
+ */
+class TikTokIoScraper : TikTokScraper {
+
+    private val baseUrl = "https://tiktokio.com"
+
+    private val client: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    override suspend fun resolve(tiktokUrl: String): ScraperResult = withContext(Dispatchers.IO) {
+        if (!tiktokUrl.contains("tiktok.com")) {
+            return@withContext ScraperResult.Error("URL yang dimasukkan bukan URL TikTok yang valid.")
+        }
+
+        try {
+            val payload = JSONObject().apply {
+                put("prefix", "tiktokio.com")
+                put("vid", tiktokUrl)
+            }.toString()
+
+            val request = Request.Builder()
+                .url("$baseUrl/api/v1/tk/html")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+                )
+                .header("Referer", "$baseUrl/id/")
+                .post(payload.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext ScraperResult.Error(
+                        "Gagal menghubungi TikTokIO: HTTP ${response.code}"
+                    )
+                }
+
+                val html = response.body?.string().orEmpty()
+                val doc = Jsoup.parse(html)
+
+                val title = doc.select(".video-info h3").firstOrNull()?.text()?.trim().orEmpty()
+
+                val medias = doc.select("a.download-btn").mapNotNull { el ->
+                    val href = el.attr("href")
+                    if (href.isBlank() || !href.startsWith("http")) return@mapNotNull null
+
+                    val classes = el.className()
+                    val type = if (classes.contains("download-btn-purple")) "audio" else "video"
+                    val quality = when {
+                        classes.contains("download-btn-green") -> "HD"
+                        classes.contains("download-btn-gray") -> "Watermark"
+                        else -> "Normal"
+                    }
+                    MediaOption(quality = quality, type = type, label = el.text().trim(), url = href)
+                }
+
+                if (medias.isEmpty()) {
+                    return@withContext ScraperResult.Error(
+                        "Gagal mengambil media. Pastikan URL video publik."
+                    )
+                }
+
+                // Prefer the best non-watermarked video; fall back gracefully.
+                val chosen = medias.firstOrNull { it.type == "video" && it.quality == "HD" }
+                    ?: medias.firstOrNull { it.type == "video" && it.quality == "Normal" }
+                    ?: medias.firstOrNull { it.type == "video" }
+                    ?: medias.first()
+
+                val fileName = title.ifBlank { "givy_${System.currentTimeMillis()}" }
+
+                ScraperResult.Success(
+                    mediaUrl = chosen.url,
+                    suggestedFileName = fileName,
+                    isAudioOnly = chosen.type == "audio"
+                )
+            }
+        } catch (e: Exception) {
+            ScraperResult.Error(
+                e.message ?: "Terjadi kesalahan saat memproses media dari TikTokIO.",
+                e
+            )
+        }
     }
 }
 
 /**
  * Single place that decides which [TikTokScraper] implementation the app
- * uses. Point this at your class once it's ready — nothing else needs to
- * change.
+ * uses. Point this at a different class if you swap the backend later —
+ * nothing else in the app needs to change.
  */
 object ScraperProvider {
-    fun get(): TikTokScraper = YourTikTokScraper()
+    fun get(): TikTokScraper = TikTokIoScraper()
 }

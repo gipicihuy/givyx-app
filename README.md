@@ -27,29 +27,19 @@ app/src/main/java/com/givy/downloader/
     └── FileDownloader.kt         # Download murni dari URL, simpan ke MediaStore (Movies/Givy atau Music/Givy)
 ```
 
-### Cara pasang scraper kamu
+### Scraper yang dipakai
 
-Buka `app/src/main/java/com/givy/downloader/scraper/TikTokScraper.kt`,
-lalu isi body `YourTikTokScraper.resolve(tiktokUrl)`:
+`app/src/main/java/com/givy/downloader/scraper/TikTokScraper.kt` sekarang
+berisi `TikTokIoScraper` — hasil port dari script Node.js (node-fetch +
+cheerio) ke Kotlin (OkHttp + Jsoup) yang memanggil endpoint publik
+`tiktokio.com`. Kredit script asli: febry.is-a.dev (github: vandebry10-star).
 
-```kotlin
-class YourTikTokScraper : TikTokScraper {
-    override suspend fun resolve(tiktokUrl: String): ScraperResult {
-        // panggil API / parsing HTML / dsb di sini
-        return ScraperResult.Success(mediaUrl = "https://.../video.mp4")
-        // atau, kalau gagal:
-        // return ScraperResult.Error("pesan error yang jelas")
-    }
-}
-```
+Kalau nanti mau ganti backend scraper lain, cukup buat class baru yang
+implement `TikTokScraper` lalu arahkan `ScraperProvider.get()` ke class itu
+— tidak ada file lain yang perlu diubah.
 
-Tidak ada file lain yang perlu diubah — `DownloadViewModel` sudah
-memanggil `ScraperProvider.get()` yang mengarah ke class ini.
-
-Kalau scraper kamu butuh API key/token/cookie, **jangan** hardcode di
-file itu. Ikuti instruksi "Secrets" yang sudah ditulis sebagai komentar
-di dalam `TikTokScraper.kt` (pakai `local.properties` + `BuildConfig`,
-atau GitHub Secrets untuk CI).
+Kalau scraper butuh API key/token/cookie, **jangan** hardcode di file itu.
+Pakai `local.properties` + `BuildConfig`, atau GitHub Secrets untuk CI.
 
 ## Build lokal
 

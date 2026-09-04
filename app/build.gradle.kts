@@ -68,6 +68,9 @@ dependencies {
     // Networking (used by the downloader to pull the file from the URL the scraper returns)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // HTML parsing for the TikTok scraper (Jsoup ~= cheerio)
+    implementation("org.jsoup:jsoup:1.17.2")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
