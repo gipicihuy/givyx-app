@@ -29,8 +29,8 @@ sealed class DownloadResult {
 }
 
 /**
- * Downloads a direct media URL to the device's shared storage (Movies/Givy or
- * Music/Givy folder) and reports progress along the way.
+ * Downloads a direct media URL to the device's shared Downloads folder and
+ * reports progress along the way.
  *
  * Fully independent from any scraper: it only ever sees the plain URL that a
  * [com.givy.downloader.scraper.ScraperResult.Success] produced. It has zero
@@ -55,8 +55,10 @@ class FileDownloader(private val context: Context) {
     /**
      * @param url direct download URL (from the scraper).
      * @param fileName desired file name, without extension is fine.
-     * @param isAudioOnly if true, saves under Music/Givy with a .mp3 fallback
-     *                     extension; otherwise Movies/Givy with .mp4 fallback.
+     * @param isAudioOnly if true, falls back to a .mp3 extension when the
+     *                     content type is ambiguous; otherwise falls back to
+     *                     .mp4. Doesn't affect where the file is saved —
+     *                     everything goes to the shared Downloads folder.
      * @param onProgress called on a background thread with a value in 0..100,
      *                    or -1 if progress can't be determined yet.
      */
@@ -90,7 +92,7 @@ class FileDownloader(private val context: Context) {
             val extension = guessExtension(contentType, isAudioOnly)
             val safeName = sanitizeFileName(fileName) + extension
 
-            val resolvedUri = createMediaStoreEntry(safeName, isAudioOnly, contentType)
+            val resolvedUri = createMediaStoreEntry(safeName, contentType)
                 ?: return@withContext DownloadResult.Error("Gagal membuat entri file di storage.")
 
             context.contentResolver.openOutputStream(resolvedUri)?.use { output: OutputStream ->
@@ -228,47 +230,35 @@ class FileDownloader(private val context: Context) {
         return true
     }
 
+    /** Creates a pending entry in the device's shared Downloads folder for both video and audio files. */
     private fun createMediaStoreEntry(
         fileName: String,
-        isAudioOnly: Boolean,
         mimeType: String
     ): Uri? {
-        val collection: Uri
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             if (mimeType.isNotBlank()) put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val relativePath = if (isAudioOnly) {
-                Environment.DIRECTORY_MUSIC + "/Givy"
-            } else {
-                Environment.DIRECTORY_MOVIES + "/Givy"
-            }
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // MediaStore.Downloads is the proper collection for arbitrary
+            // downloaded files (video or audio) landing in the Downloads
+            // folder — unlike Video.Media/Audio.Media, it isn't tied to a
+            // specific media type, so both .mp4 and .mp3 end up in the same
+            // place the user expects: Downloads, visible from any file manager.
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
             values.put(MediaStore.MediaColumns.IS_PENDING, 1)
-            collection = if (isAudioOnly) {
-                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            } else {
-                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            }
+            context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
         } else {
+            // Pre-Q: no MediaStore.Downloads collection exists yet, so write
+            // straight to the public Downloads directory and register it via
+            // the generic Files collection so it still shows up everywhere.
             @Suppress("DEPRECATION")
-            val dir = if (isAudioOnly) {
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-            } else {
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-            }
-            val givyDir = File(dir, "Givy").apply { if (!exists()) mkdirs() }
-            values.put(MediaStore.MediaColumns.DATA, File(givyDir, fileName).absolutePath)
-            collection = if (isAudioOnly) {
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            } else {
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            }
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                .apply { if (!exists()) mkdirs() }
+            values.put(MediaStore.MediaColumns.DATA, File(downloadsDir, fileName).absolutePath)
+            context.contentResolver.insert(MediaStore.Files.getContentUri("external"), values)
         }
-
-        return context.contentResolver.insert(collection, values)
     }
 
     private fun finalizePending(uri: Uri) {
