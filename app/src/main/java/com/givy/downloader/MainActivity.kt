@@ -4,11 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,11 +20,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -44,15 +51,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.rememberAsyncImagePainter
+import com.givy.downloader.scraper.MediaOption
 import com.givy.downloader.ui.theme.GivyDownloaderTheme
 import com.givy.downloader.ui.theme.GivyError
 import com.givy.downloader.ui.theme.GivyOnSurfaceMuted
 import com.givy.downloader.ui.theme.GivySuccess
 import com.givy.downloader.ui.theme.GivySurface
+import com.givy.downloader.ui.theme.GivySurfaceVariant
 import com.givy.downloader.viewmodel.DownloadUiState
 import com.givy.downloader.viewmodel.DownloadViewModel
 
@@ -78,7 +91,9 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     var url by remember { mutableStateOf("") }
 
-    val isBusy = uiState is DownloadUiState.Resolving || uiState is DownloadUiState.Downloading
+    val isResolving = uiState is DownloadUiState.Resolving
+    val isDownloading = uiState is DownloadUiState.Downloading
+    val isBusy = isResolving || isDownloading
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
@@ -90,7 +105,7 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             Text(
                 text = "Givy Downloader",
@@ -99,12 +114,12 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Tempel link TikTok, unduh videonya.",
+                text = "Tempel link TikTok, pilih kualitas, unduh.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = GivyOnSurfaceMuted
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(
                 value = url,
@@ -133,10 +148,10 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Button(
-                onClick = { viewModel.startDownload(url) },
+                onClick = { viewModel.resolveLink(url) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -148,40 +163,40 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
                 )
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isBusy) {
+                    if (isResolving) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(imageVector = Icons.Filled.Download, contentDescription = null)
+                        Icon(imageVector = Icons.Filled.Search, contentDescription = null)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = statusLabel(uiState),
+                        text = if (isResolving) "Mencari..." else "Cari Video",
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            StatusPanel(uiState = uiState, onDismiss = { viewModel.reset() })
+            StatusPanel(
+                uiState = uiState,
+                onDismiss = { viewModel.reset() },
+                onPickOption = { option, title -> viewModel.downloadOption(option, title) }
+            )
         }
     }
 }
 
-private fun statusLabel(state: DownloadUiState): String = when (state) {
-    is DownloadUiState.Idle -> "Download"
-    is DownloadUiState.Resolving -> "Memproses link..."
-    is DownloadUiState.Downloading -> if (state.progress >= 0) "Mengunduh ${state.progress}%" else "Mengunduh..."
-    is DownloadUiState.Success -> "Download"
-    is DownloadUiState.Error -> "Coba Lagi"
-}
-
 @Composable
-private fun StatusPanel(uiState: DownloadUiState, onDismiss: () -> Unit) {
+private fun StatusPanel(
+    uiState: DownloadUiState,
+    onDismiss: () -> Unit,
+    onPickOption: (MediaOption, String) -> Unit
+) {
     when (uiState) {
         is DownloadUiState.Idle -> Unit
 
@@ -190,20 +205,30 @@ private fun StatusPanel(uiState: DownloadUiState, onDismiss: () -> Unit) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Mengambil sumber video dari link kamu...",
+                    text = "Mengambil info video dari link kamu...",
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         }
 
+        is DownloadUiState.Preview -> PreviewCard(
+            title = uiState.title,
+            thumbnailUrl = uiState.thumbnailUrl,
+            options = uiState.options,
+            onPickOption = { option -> onPickOption(option, uiState.title) },
+            onDismiss = onDismiss
+        )
+
         is DownloadUiState.Downloading -> StatusCard(borderColor = MaterialTheme.colorScheme.outline) {
             Column {
                 Text(
-                    text = "Sedang mengunduh...",
+                    text = "Mengunduh: ${uiState.optionLabel}",
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 if (uiState.progress >= 0) {
@@ -247,7 +272,9 @@ private fun StatusPanel(uiState: DownloadUiState, onDismiss: () -> Unit) {
                         Text(
                             text = uiState.fileName,
                             color = GivyOnSurfaceMuted,
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -263,7 +290,7 @@ private fun StatusPanel(uiState: DownloadUiState, onDismiss: () -> Unit) {
                     Icon(imageVector = Icons.Filled.ErrorOutline, contentDescription = null, tint = GivyError)
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
-                            text = "Gagal mengunduh",
+                            text = "Gagal",
                             color = MaterialTheme.colorScheme.onBackground,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
@@ -277,6 +304,100 @@ private fun StatusPanel(uiState: DownloadUiState, onDismiss: () -> Unit) {
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewCard(
+    title: String,
+    thumbnailUrl: String?,
+    options: List<MediaOption>,
+    onPickOption: (MediaOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = GivySurface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .width(96.dp)
+                        .aspectRatio(9f / 16f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(GivySurfaceVariant)
+                ) {
+                    if (thumbnailUrl != null) {
+                        Image(
+                            painter = rememberAsyncImagePainter(thumbnailUrl),
+                            contentDescription = "Thumbnail video",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                            Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${options.size} pilihan kualitas tersedia",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GivyOnSurfaceMuted
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            options.forEach { option ->
+                OutlinedButton(
+                    onClick = { onPickOption(option) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = when {
+                            option.isAudioOnly -> Icons.Filled.AudioFile
+                            option.quality == "HD" -> Icons.Filled.HighQuality
+                            else -> Icons.Filled.VideoFile
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = option.label, modifier = Modifier.weight(1f))
                 }
             }
         }

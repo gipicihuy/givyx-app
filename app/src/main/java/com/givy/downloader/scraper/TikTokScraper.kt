@@ -14,34 +14,22 @@ import java.util.concurrent.TimeUnit
  * Contract the rest of the app (UI + downloader) talks to.
  *
  * The downloader module never imports anything TikTok-specific — it only
- * depends on this interface and on [ScraperResult]. That keeps "get the
- * direct media URL" and "download bytes to storage" fully decoupled, so you
- * can swap, rewrite, or update your scraper without touching the download
- * pipeline or the UI at all.
+ * depends on this interface and on [ScraperResult]/[MediaOption]. That keeps
+ * "get the direct media URL(s)" and "download bytes to storage" fully
+ * decoupled, so you can swap, rewrite, or update your scraper without
+ * touching the download pipeline or the UI at all.
  */
 interface TikTokScraper {
     /**
-     * Resolve a public TikTok share/video URL into a direct, downloadable
-     * media URL.
+     * Resolve a public TikTok share/video URL into its metadata and every
+     * downloadable variant available.
      *
      * @param tiktokUrl the raw URL the user typed/pasted into the app.
-     * @return [ScraperResult.Success] with a direct media URL, or
+     * @return [ScraperResult.Success] with title/thumbnail/options, or
      *         [ScraperResult.Error] with a user-facing message.
      */
     suspend fun resolve(tiktokUrl: String): ScraperResult
 }
-
-/**
- * One downloadable option returned by TikTokIO for a given video (there's
- * usually a watermark version, an HD/no-watermark version, and an audio-only
- * version).
- */
-private data class MediaOption(
-    val quality: String,   // "HD" | "Normal" | "Watermark"
-    val type: String,      // "video" | "audio"
-    val label: String,
-    val url: String
-)
 
 /**
  * Scraper backed by tiktokio.com's public resolver endpoint.
@@ -95,39 +83,55 @@ class TikTokIoScraper : TikTokScraper {
                 val doc = Jsoup.parse(html)
 
                 val title = doc.select(".video-info h3").firstOrNull()?.text()?.trim().orEmpty()
+                val thumbnailUrl = doc.select(".video-info img").firstOrNull()?.attr("src")
+                    ?.takeIf { it.isNotBlank() }
 
-                val medias = doc.select("a.download-btn").mapNotNull { el ->
+                val options = doc.select("a.download-btn").mapIndexedNotNull { index, el ->
                     val href = el.attr("href")
-                    if (href.isBlank() || !href.startsWith("http")) return@mapNotNull null
+                    if (href.isBlank() || !href.startsWith("http")) return@mapIndexedNotNull null
 
                     val classes = el.className()
-                    val type = if (classes.contains("download-btn-purple")) "audio" else "video"
+                    val isAudio = classes.contains("download-btn-purple")
                     val quality = when {
                         classes.contains("download-btn-green") -> "HD"
                         classes.contains("download-btn-gray") -> "Watermark"
                         else -> "Normal"
                     }
-                    MediaOption(quality = quality, type = type, label = el.text().trim(), url = href)
+                    val label = when {
+                        isAudio -> "Audio (MP3)"
+                        quality == "HD" -> "HD - Tanpa Watermark"
+                        quality == "Watermark" -> "Video - Dengan Watermark"
+                        else -> "Video - Normal"
+                    }
+
+                    MediaOption(
+                        id = "$quality-$index",
+                        label = label,
+                        quality = quality,
+                        isAudioOnly = isAudio,
+                        mediaUrl = href
+                    )
                 }
 
-                if (medias.isEmpty()) {
+                if (options.isEmpty()) {
                     return@withContext ScraperResult.Error(
                         "Gagal mengambil media. Pastikan URL video publik."
                     )
                 }
 
-                // Prefer the best non-watermarked video; fall back gracefully.
-                val chosen = medias.firstOrNull { it.type == "video" && it.quality == "HD" }
-                    ?: medias.firstOrNull { it.type == "video" && it.quality == "Normal" }
-                    ?: medias.firstOrNull { it.type == "video" }
-                    ?: medias.first()
-
-                val fileName = title.ifBlank { "givy_${System.currentTimeMillis()}" }
+                // Nicer default ordering: best video quality first, audio last.
+                val ordered = options.sortedBy { opt ->
+                    when {
+                        opt.isAudioOnly -> 2
+                        opt.quality == "HD" -> 0
+                        else -> 1
+                    }
+                }
 
                 ScraperResult.Success(
-                    mediaUrl = chosen.url,
-                    suggestedFileName = fileName,
-                    isAudioOnly = chosen.type == "audio"
+                    title = title.ifBlank { "Video TikTok" },
+                    thumbnailUrl = thumbnailUrl,
+                    options = ordered
                 )
             }
         } catch (e: Exception) {

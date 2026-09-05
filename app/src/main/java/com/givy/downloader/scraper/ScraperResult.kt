@@ -1,28 +1,43 @@
 package com.givy.downloader.scraper
 
 /**
+ * One downloadable variant of the resolved media (e.g. "HD, no watermark",
+ * "Watermarked", "Audio only"). The UI shows these as pickable options after
+ * a link is resolved, instead of downloading the first thing found.
+ *
+ * @param id stable-enough identifier to key the option in the UI (e.g. "HD-video").
+ * @param label human-readable text shown on the option button, e.g. "HD (No Watermark)".
+ * @param quality free-form quality tag from the source ("HD" | "Normal" | "Watermark" | ...).
+ * @param isAudioOnly true if this option is an audio-only track.
+ * @param mediaUrl direct, ready-to-download URL — a plain HTTP GET must be able to stream it.
+ */
+data class MediaOption(
+    val id: String,
+    val label: String,
+    val quality: String,
+    val isAudioOnly: Boolean,
+    val mediaUrl: String
+)
+
+/**
  * The output of a [TikTokScraper] call.
  *
- * This is the ONLY thing the downloader module knows about. It has no idea how
- * the direct media URL was obtained (API call, HTML scraping, third-party
+ * This is the ONLY thing the downloader/UI knows about. It has no idea how
+ * the direct media URL(s) were obtained (API call, HTML scraping, third-party
  * service, etc.) — that is entirely the scraper's responsibility.
  */
 sealed class ScraperResult {
 
     /**
-     * @param mediaUrl direct, ready-to-download URL to the video (or audio) file.
-     *                 Must be a URL a plain HTTP GET can stream bytes from
-     *                 (i.e. already resolved past any redirects/signing your
-     *                 scraper needs to do).
-     * @param suggestedFileName file name to save on device, WITHOUT extension
-     *                          is fine too (the downloader will infer one from
-     *                          the response content-type if missing).
-     * @param isAudioOnly set true if [mediaUrl] points to an audio-only track.
+     * @param title video caption/title, used as the default file name and shown in the preview.
+     * @param thumbnailUrl preview image URL, or null if the source didn't provide one.
+     * @param options every downloadable variant the scraper found. Must not be empty —
+     *                 return [Error] instead if nothing downloadable was found.
      */
     data class Success(
-        val mediaUrl: String,
-        val suggestedFileName: String = "givy_${System.currentTimeMillis()}",
-        val isAudioOnly: Boolean = false
+        val title: String,
+        val thumbnailUrl: String?,
+        val options: List<MediaOption>
     ) : ScraperResult()
 
     /**

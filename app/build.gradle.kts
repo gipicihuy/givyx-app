@@ -76,6 +76,9 @@ dependencies {
     // HTML parsing for the TikTok scraper (Jsoup ~= cheerio)
     implementation("org.jsoup:jsoup:1.17.2")
 
+    // Async image loading for the video thumbnail preview
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

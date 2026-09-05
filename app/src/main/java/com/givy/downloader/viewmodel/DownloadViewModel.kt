@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.givy.downloader.downloader.DownloadResult
 import com.givy.downloader.downloader.FileDownloader
+import com.givy.downloader.scraper.MediaOption
 import com.givy.downloader.scraper.ScraperProvider
 import com.givy.downloader.scraper.ScraperResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +20,15 @@ import kotlinx.coroutines.launch
 sealed class DownloadUiState {
     data object Idle : DownloadUiState()
     data object Resolving : DownloadUiState()
-    data class Downloading(val progress: Int) : DownloadUiState() // -1 = indeterminate
+
+    /** Link resolved: show thumbnail/title and let the user pick a quality. */
+    data class Preview(
+        val title: String,
+        val thumbnailUrl: String?,
+        val options: List<MediaOption>
+    ) : DownloadUiState()
+
+    data class Downloading(val progress: Int, val optionLabel: String) : DownloadUiState() // progress -1 = indeterminate
     data class Success(val uri: Uri, val fileName: String) : DownloadUiState()
     data class Error(val message: String) : DownloadUiState()
 }
@@ -34,7 +43,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow<DownloadUiState>(DownloadUiState.Idle)
     val uiState: StateFlow<DownloadUiState> = _uiState.asStateFlow()
 
-    fun startDownload(rawUrl: String) {
+    /** Step 1: resolve the link into a preview + list of quality options. */
+    fun resolveLink(rawUrl: String) {
         val url = rawUrl.trim()
 
         if (url.isEmpty()) {
@@ -49,27 +59,35 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _uiState.value = DownloadUiState.Resolving
 
-            when (val result = scraper.resolve(url)) {
-                is ScraperResult.Error -> {
-                    _uiState.value = DownloadUiState.Error(result.message)
-                }
-                is ScraperResult.Success -> {
-                    _uiState.value = DownloadUiState.Downloading(-1)
-                    val downloadResult = downloader.download(
-                        url = result.mediaUrl,
-                        fileName = result.suggestedFileName,
-                        isAudioOnly = result.isAudioOnly
-                    ) { progress ->
-                        _uiState.value = DownloadUiState.Downloading(progress)
-                    }
+            _uiState.value = when (val result = scraper.resolve(url)) {
+                is ScraperResult.Error -> DownloadUiState.Error(result.message)
+                is ScraperResult.Success -> DownloadUiState.Preview(
+                    title = result.title,
+                    thumbnailUrl = result.thumbnailUrl,
+                    options = result.options
+                )
+            }
+        }
+    }
 
-                    _uiState.value = when (downloadResult) {
-                        is DownloadResult.Success ->
-                            DownloadUiState.Success(downloadResult.savedUri, downloadResult.fileName)
-                        is DownloadResult.Error ->
-                            DownloadUiState.Error(downloadResult.message)
-                    }
-                }
+    /** Step 2: user picked a quality option from the preview — download it. */
+    fun downloadOption(option: MediaOption, suggestedFileName: String) {
+        viewModelScope.launch {
+            _uiState.value = DownloadUiState.Downloading(progress = -1, optionLabel = option.label)
+
+            val downloadResult = downloader.download(
+                url = option.mediaUrl,
+                fileName = suggestedFileName,
+                isAudioOnly = option.isAudioOnly
+            ) { progress ->
+                _uiState.value = DownloadUiState.Downloading(progress = progress, optionLabel = option.label)
+            }
+
+            _uiState.value = when (downloadResult) {
+                is DownloadResult.Success ->
+                    DownloadUiState.Success(downloadResult.savedUri, downloadResult.fileName)
+                is DownloadResult.Error ->
+                    DownloadUiState.Error(downloadResult.message)
             }
         }
     }
