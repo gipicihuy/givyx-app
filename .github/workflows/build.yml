@@ -7,6 +7,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,3 +39,22 @@ jobs:
           name: givy-downloader-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Publishes the same APK to a public, no-login-required download link.
+      # Only runs on pushes to main (not on pull requests) so PRs can't
+      # publish a release. Reuses the tag "latest" every time, so the
+      # release page always has this one link with the newest build —
+      # nothing piles up, no manual versioning needed.
+      - name: Publish/update 'latest' GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Givy Downloader (latest build)"
+          body: |
+            Auto-updated debug build from commit ${{ github.sha }}.
+            This is a debug APK, not a signed release build.
+          prerelease: true
+          make_latest: true
+          files: app/build/outputs/apk/debug/*.apk
+
