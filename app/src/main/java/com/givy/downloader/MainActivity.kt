@@ -6,12 +6,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,19 +22,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.VideoFile
+import androidx.compose.material.icons.outlined.AudioFile
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.HighQuality
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.VideoFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -58,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.givy.downloader.scraper.MediaOption
@@ -116,6 +120,8 @@ fun GivyDownloaderScreen(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
             UpdateBanner(
                 state = updateState,
                 onUpdateClick = { downloadUrl -> updateViewModel.downloadAndInstall(downloadUrl) },
@@ -123,7 +129,11 @@ fun GivyDownloaderScreen(
                 onDismiss = { updateViewModel.dismiss() }
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            BrandMark()
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "GIVY DOWNLOADER",
@@ -139,18 +149,21 @@ fun GivyDownloaderScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            SectionLabel(text = "TAUTAN TIKTOK")
+            Spacer(modifier = Modifier.height(8.dp))
+
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("https://www.tiktok.com/@user/video/...") },
                 leadingIcon = {
-                    Icon(imageVector = Icons.Filled.Link, contentDescription = null)
+                    Icon(imageVector = Icons.Outlined.Link, contentDescription = null)
                 },
                 trailingIcon = {
                     if (url.isNotEmpty() && !isBusy) {
                         IconButton(onClick = { url = "" }) {
-                            Icon(imageVector = Icons.Filled.Clear, contentDescription = "Bersihkan")
+                            Icon(imageVector = Icons.Outlined.Clear, contentDescription = "Bersihkan")
                         }
                     }
                 },
@@ -189,7 +202,7 @@ fun GivyDownloaderScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(imageVector = Icons.Filled.Download, contentDescription = null)
+                        Icon(imageVector = Icons.Outlined.Download, contentDescription = null)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -206,8 +219,38 @@ fun GivyDownloaderScreen(
                 onDismiss = { viewModel.reset() },
                 onPickOption = { option, title -> viewModel.downloadOption(option, title) }
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
+}
+
+/** Small bordered square mark used as the app's identity above the title, echoing Mori's minimal wordmark header. */
+@Composable
+private fun BrandMark() {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "G",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+/** Small uppercase, tracked-out caption used above form sections — mirrors Mori's structured, labeled sections. */
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium.copy(letterSpacing = 2.sp),
+        color = GivyOnSurfaceMuted,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -223,18 +266,16 @@ private fun UpdateBanner(
         is UpdateUiState.Available -> Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(4.dp),
-            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
-                        imageVector = Icons.Filled.Download,
+                        imageVector = Icons.Outlined.Download,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
@@ -243,17 +284,20 @@ private fun UpdateBanner(
                     Text(
                         text = "Update tersedia",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.weight(1f)
                     )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(imageVector = Icons.Outlined.Clear, contentDescription = "Tutup")
+                    }
                 }
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = { onUpdateClick(state.downloadUrl) },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text("UPDATE", style = MaterialTheme.typography.labelLarge)
-                }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                    Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
                 }
             }
         }
@@ -261,9 +305,10 @@ private fun UpdateBanner(
         is UpdateUiState.Downloading -> Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(4.dp),
-            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = if (state.progress >= 0) "Mengunduh update... ${state.progress}%" else "Mengunduh update...",
                     style = MaterialTheme.typography.bodyMedium,
@@ -290,25 +335,24 @@ private fun UpdateBanner(
         is UpdateUiState.ReadyToInstall -> Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(4.dp),
-            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = "Update siap dipasang",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
+                    color = MaterialTheme.colorScheme.onBackground
                 )
+                Spacer(modifier = Modifier.height(10.dp))
                 Button(
                     onClick = { onInstallClick(state.filePath) },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(4.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
                 ) {
                     Text("INSTALL", style = MaterialTheme.typography.labelLarge)
                 }
@@ -328,7 +372,7 @@ private fun StatusPanel(
     when (uiState) {
         is DownloadUiState.Idle -> Unit
 
-        is DownloadUiState.Resolving -> StatusCard(borderColor = MaterialTheme.colorScheme.outline) {
+        is DownloadUiState.Resolving -> StatusCard(accentColor = MaterialTheme.colorScheme.primary) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(12.dp))
@@ -348,7 +392,7 @@ private fun StatusPanel(
             onDismiss = onDismiss
         )
 
-        is DownloadUiState.Downloading -> StatusCard(borderColor = MaterialTheme.colorScheme.outline) {
+        is DownloadUiState.Downloading -> StatusCard(accentColor = MaterialTheme.colorScheme.primary) {
             Column {
                 Text(
                     text = "Mengunduh: ${uiState.optionLabel}",
@@ -386,10 +430,10 @@ private fun StatusPanel(
             }
         }
 
-        is DownloadUiState.Success -> StatusCard(borderColor = GivySuccess) {
+        is DownloadUiState.Success -> StatusCard(accentColor = GivySuccess) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Filled.CheckCircle, contentDescription = null, tint = GivySuccess)
+                    Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null, tint = GivySuccess)
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
                             text = "Berhasil disimpan",
@@ -407,15 +451,15 @@ private fun StatusPanel(
                     }
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
+                    Icon(imageVector = Icons.Outlined.Clear, contentDescription = "Tutup")
                 }
             }
         }
 
-        is DownloadUiState.Error -> StatusCard(borderColor = GivyError) {
+        is DownloadUiState.Error -> StatusCard(accentColor = GivyError) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Filled.ErrorOutline, contentDescription = null, tint = GivyError)
+                    Icon(imageVector = Icons.Outlined.ErrorOutline, contentDescription = null, tint = GivyError)
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
                             text = "Gagal",
@@ -431,13 +475,19 @@ private fun StatusPanel(
                     }
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
+                    Icon(imageVector = Icons.Outlined.Clear, contentDescription = "Tutup")
                 }
             }
         }
     }
 }
 
+/**
+ * Media card redesigned as a vertical stack — full-width thumbnail on top
+ * (with a floating close button, like Mori's .media-card / .close-card),
+ * title + meta beneath it, then a labeled, full-width list of quality
+ * options. Replaces the old side-by-side thumbnail+text row layout.
+ */
 @Composable
 private fun PreviewCard(
     title: String,
@@ -449,102 +499,117 @@ private fun PreviewCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = GivySurface)
+        colors = CardDefaults.cardColors(containerColor = GivySurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .width(96.dp)
-                        .aspectRatio(9f / 16f)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(GivySurfaceVariant)
-                ) {
-                    if (thumbnailUrl != null) {
-                        Image(
-                            painter = rememberAsyncImagePainter(thumbnailUrl),
-                            contentDescription = "Thumbnail video",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(4f / 5f)
+                    .background(GivySurfaceVariant)
+            ) {
+                if (thumbnailUrl != null) {
+                    Image(
+                        painter = rememberAsyncImagePainter(thumbnailUrl),
+                        contentDescription = "Thumbnail video",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(
+                IconButton(
+                    onClick = onDismiss,
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.Top
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                            Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${options.size} pilihan kualitas tersedia",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = GivyOnSurfaceMuted
+                    Icon(
+                        imageVector = Icons.Outlined.Clear,
+                        contentDescription = "Tutup",
+                        tint = Color.White
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${options.size} pilihan kualitas tersedia",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GivyOnSurfaceMuted
+                )
 
-            options.forEach { option ->
-                OutlinedButton(
-                    onClick = { onPickOption(option) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Icon(
-                        imageVector = when {
-                            option.isAudioOnly -> Icons.Filled.AudioFile
-                            option.quality == "HD" -> Icons.Filled.HighQuality
-                            else -> Icons.Filled.VideoFile
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = option.label, modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                SectionLabel(text = "PILIH KUALITAS")
+                Spacer(modifier = Modifier.height(10.dp))
+
+                options.forEach { option ->
+                    OutlinedButton(
+                        onClick = { onPickOption(option) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                option.isAudioOnly -> Icons.Outlined.AudioFile
+                                option.quality == "HD" -> Icons.Outlined.HighQuality
+                                else -> Icons.Outlined.VideoFile
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = option.label, modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Status card with a solid accent stripe on the leading edge instead of a
+ * tinted border, keeping the card body itself monochrome — consistent with
+ * Mori's flat, high-contrast surfaces where color is used sparingly.
+ */
 @Composable
 private fun StatusCard(
-    borderColor: Color,
+    accentColor: Color,
     content: @Composable () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(4.dp),
         colors = CardDefaults.cardColors(containerColor = GivySurface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor.copy(alpha = 0.4f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        Box(modifier = Modifier.padding(16.dp)) {
-            content()
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(accentColor)
+            )
+            Box(modifier = Modifier.padding(16.dp)) {
+                content()
+            }
         }
     }
 }
