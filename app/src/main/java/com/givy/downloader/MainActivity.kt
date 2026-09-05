@@ -126,7 +126,7 @@ fun GivyDownloaderScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Givy Downloader",
+                text = "GIVY DOWNLOADER",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -156,14 +156,15 @@ fun GivyDownloaderScreen(
                 },
                 singleLine = true,
                 enabled = !isBusy,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(4.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = GivySurface,
                     unfocusedContainerColor = GivySurface,
                     disabledContainerColor = GivySurface,
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                )
+                ),
+                textStyle = MaterialTheme.typography.bodyLarge
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -174,7 +175,7 @@ fun GivyDownloaderScreen(
                     .fillMaxWidth()
                     .height(52.dp),
                 enabled = !isBusy && url.isNotBlank(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(4.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -192,7 +193,7 @@ fun GivyDownloaderScreen(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isResolving) "Memproses..." else "Ambil Video",
+                        text = if (isResolving) "MEMPROSES..." else "AMBIL VIDEO",
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -221,7 +222,7 @@ private fun UpdateBanner(
 
         is UpdateUiState.Available -> Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(4.dp),
             colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
         ) {
             Row(
@@ -247,9 +248,9 @@ private fun UpdateBanner(
                 }
                 OutlinedButton(
                     onClick = { onUpdateClick(state.downloadUrl) },
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(4.dp)
                 ) {
-                    Text("Update", style = MaterialTheme.typography.labelLarge)
+                    Text("UPDATE", style = MaterialTheme.typography.labelLarge)
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
                     Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
@@ -259,7 +260,7 @@ private fun UpdateBanner(
 
         is UpdateUiState.Downloading -> Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(4.dp),
             colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
@@ -288,7 +289,7 @@ private fun UpdateBanner(
 
         is UpdateUiState.ReadyToInstall -> Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(4.dp),
             colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
         ) {
             Row(
@@ -306,10 +307,10 @@ private fun UpdateBanner(
                 )
                 Button(
                     onClick = { onInstallClick(state.filePath) },
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(4.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("Install", style = MaterialTheme.typography.labelLarge)
+                    Text("INSTALL", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -447,7 +448,7 @@ private fun PreviewCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(4.dp),
         colors = CardDefaults.cardColors(containerColor = GivySurface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -456,7 +457,7 @@ private fun PreviewCard(
                     modifier = Modifier
                         .width(96.dp)
                         .aspectRatio(9f / 16f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(4.dp))
                         .background(GivySurfaceVariant)
                 ) {
                     if (thumbnailUrl != null) {
@@ -512,7 +513,7 @@ private fun PreviewCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(4.dp)
                 ) {
                     Icon(
                         imageVector = when {
@@ -538,7 +539,7 @@ private fun StatusCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(4.dp),
         colors = CardDefaults.cardColors(containerColor = GivySurface),
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor.copy(alpha = 0.4f))
     ) {
