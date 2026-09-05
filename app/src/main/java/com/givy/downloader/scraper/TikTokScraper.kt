@@ -113,16 +113,53 @@ class TikTokIoScraper : TikTokScraper {
                     )
                 }
 
-                if (options.isEmpty()) {
+                // Slideshow ("slide foto") posts don't have a video at all — tiktokio
+                // renders each photo as an <img> inside the result instead of a
+                // download-btn link. We pick those up separately by scanning for
+                // image tags in the likely slideshow containers and treating each
+                // one as its own downloadable option, since there's no single
+                // "video-btn"-style link to grab like there is for videos.
+                //
+                // NOTE: this is a best-effort selector based on how these clone
+                // sites commonly render slideshow results — I couldn't load
+                // tiktokio.com live from this sandbox to confirm the exact markup
+                // for a slide post, so if it doesn't pick up photos on a real
+                // slideshow link, the selector below is the first place to adjust
+                // (inspect the actual response HTML for the img/container classes).
+                val slidePhotoOptions = doc.select(
+                    ".video-info img, .photo-list img, .images img, [class*=slide] img, [class*=photo] img"
+                )
+                    .mapNotNull { img ->
+                        (img.attr("data-src").ifBlank { img.attr("src") })
+                            .takeIf { it.isNotBlank() && it.startsWith("http") }
+                    }
+                    .filterNot { it == thumbnailUrl } // don't re-list the cover thumbnail as a "photo"
+                    .distinct()
+                    .mapIndexed { index, photoUrl ->
+                        MediaOption(
+                            id = "photo-$index",
+                            label = "Foto ${index + 1}",
+                            quality = "Foto",
+                            isAudioOnly = false,
+                            isImage = true,
+                            mediaUrl = photoUrl
+                        )
+                    }
+
+                val allOptions = options + slidePhotoOptions
+
+                if (allOptions.isEmpty()) {
                     return@withContext ScraperResult.Error(
                         "Gagal mengambil media. Pastikan URL video publik."
                     )
                 }
 
-                // Nicer default ordering: best video quality first, audio last.
-                val ordered = options.sortedBy { opt ->
+                // Nicer default ordering: best video quality first, photos after
+                // video options, audio last.
+                val ordered = allOptions.sortedBy { opt ->
                     when {
-                        opt.isAudioOnly -> 2
+                        opt.isAudioOnly -> 3
+                        opt.isImage -> 2
                         opt.quality == "HD" -> 0
                         else -> 1
                     }

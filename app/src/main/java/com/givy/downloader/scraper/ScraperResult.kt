@@ -2,13 +2,16 @@ package com.givy.downloader.scraper
 
 /**
  * One downloadable variant of the resolved media (e.g. "HD, no watermark",
- * "Watermarked", "Audio only"). The UI shows these as pickable options after
- * a link is resolved, instead of downloading the first thing found.
+ * "Watermarked", "Audio only", or one photo from a TikTok slideshow post).
+ * The UI shows these as pickable options after a link is resolved, instead
+ * of downloading the first thing found.
  *
  * @param id stable-enough identifier to key the option in the UI (e.g. "HD-video").
  * @param label human-readable text shown on the option button, e.g. "HD (No Watermark)".
- * @param quality free-form quality tag from the source ("HD" | "Normal" | "Watermark" | ...).
+ * @param quality free-form quality tag from the source ("HD" | "Normal" | "Watermark" | "Foto" | ...).
  * @param isAudioOnly true if this option is an audio-only track.
+ * @param isImage true if this option is a single photo from a TikTok slideshow post
+ *                 (as opposed to a video or audio track).
  * @param mediaUrl direct, ready-to-download URL — a plain HTTP GET must be able to stream it.
  */
 data class MediaOption(
@@ -16,7 +19,8 @@ data class MediaOption(
     val label: String,
     val quality: String,
     val isAudioOnly: Boolean,
-    val mediaUrl: String
+    val mediaUrl: String,
+    val isImage: Boolean = false
 )
 
 /**

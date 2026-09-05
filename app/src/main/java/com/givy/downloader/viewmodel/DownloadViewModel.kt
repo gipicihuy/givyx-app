@@ -72,13 +72,24 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     /** Step 2: user picked a quality option from the preview — download it. */
     fun downloadOption(option: MediaOption, suggestedFileName: String) {
+        // Slideshow posts have several photo options that would otherwise all
+        // share the same base file name (from the post's caption) — append a
+        // distinguishing suffix so each photo lands as its own file instead
+        // of relying on the OS to auto-number colliding names.
+        val fileName = if (option.isImage) {
+            "$suggestedFileName-${option.label.lowercase().replace(" ", "-")}"
+        } else {
+            suggestedFileName
+        }
+
         viewModelScope.launch {
             _uiState.value = DownloadUiState.Downloading(progress = -1, optionLabel = option.label)
 
             val downloadResult = downloader.download(
                 url = option.mediaUrl,
-                fileName = suggestedFileName,
-                isAudioOnly = option.isAudioOnly
+                fileName = fileName,
+                isAudioOnly = option.isAudioOnly,
+                isImage = option.isImage
             ) { progress ->
                 _uiState.value = DownloadUiState.Downloading(progress = progress, optionLabel = option.label)
             }

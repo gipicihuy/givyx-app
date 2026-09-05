@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.HighQuality
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.VideoFile
 import androidx.compose.material3.Button
@@ -571,6 +572,7 @@ private fun PreviewCard(
                         Icon(
                             imageVector = when {
                                 option.isAudioOnly -> Icons.Outlined.AudioFile
+                                option.isImage -> Icons.Outlined.Image
                                 option.quality == "HD" -> Icons.Outlined.HighQuality
                                 else -> Icons.Outlined.VideoFile
                             },
