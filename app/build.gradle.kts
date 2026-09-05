@@ -16,6 +16,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Passed by CI as -PgitSha=<commit sha> so the running app knows which
+        // commit it was built from; the in-app update checker compares this
+        // against the commit noted in the latest GitHub Release to decide if
+        // an update is available. Defaults to "local" for local builds.
+        buildConfigField(
+            "String",
+            "GIT_COMMIT",
+            "\"${(project.findProperty("gitSha") as String?) ?: "local"}\""
+        )
+        buildConfigField("String", "GITHUB_REPO", "\"gipicihuy/givyx-app\"")
     }
 
     buildTypes {
@@ -42,6 +53,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

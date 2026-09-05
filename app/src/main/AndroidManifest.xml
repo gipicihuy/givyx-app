@@ -10,6 +10,12 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- Lets the app launch the system's APK installer for the in-app update
+         flow. The user still gets the standard Android "Install unknown app"
+         confirmation the first time — this permission alone does not enable
+         silent installs. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".GivyApplication"
         android:allowBackup="true"
@@ -30,6 +36,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Exposes the downloaded update APK (stored in app-private cache)
+             to the system installer via a content:// URI, as required since
+             Android 7 (file:// URIs are blocked by StrictMode for other apps). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,8 @@ import com.givy.downloader.ui.theme.GivySurface
 import com.givy.downloader.ui.theme.GivySurfaceVariant
 import com.givy.downloader.viewmodel.DownloadUiState
 import com.givy.downloader.viewmodel.DownloadViewModel
+import com.givy.downloader.viewmodel.UpdateUiState
+import com.givy.downloader.viewmodel.UpdateViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,9 +90,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
+fun GivyDownloaderScreen(
+    viewModel: DownloadViewModel = viewModel(),
+    updateViewModel: UpdateViewModel = viewModel()
+) {
     val uiState by viewModel.uiState.collectAsState()
+    val updateState by updateViewModel.updateState.collectAsState()
     var url by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        updateViewModel.checkForUpdateSilently()
+    }
 
     val isResolving = uiState is DownloadUiState.Resolving
     val isDownloading = uiState is DownloadUiState.Downloading
@@ -105,7 +116,14 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(40.dp))
+            UpdateBanner(
+                state = updateState,
+                onUpdateClick = { downloadUrl -> updateViewModel.downloadAndInstall(downloadUrl) },
+                onInstallClick = { path -> updateViewModel.promptInstall(path) },
+                onDismiss = { updateViewModel.dismiss() }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Givy Downloader",
@@ -188,6 +206,115 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
                 onPickOption = { option, title -> viewModel.downloadOption(option, title) }
             )
         }
+    }
+}
+
+@Composable
+private fun UpdateBanner(
+    state: UpdateUiState,
+    onUpdateClick: (String) -> Unit,
+    onInstallClick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    when (state) {
+        is UpdateUiState.Hidden -> Unit
+
+        is UpdateUiState.Available -> Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Filled.Download,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Update tersedia",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                OutlinedButton(
+                    onClick = { onUpdateClick(state.downloadUrl) },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Update", style = MaterialTheme.typography.labelLarge)
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                    Icon(imageVector = Icons.Filled.Clear, contentDescription = "Tutup")
+                }
+            }
+        }
+
+        is UpdateUiState.Downloading -> Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = if (state.progress >= 0) "Mengunduh update... ${state.progress}%" else "Mengunduh update...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (state.progress >= 0) {
+                    LinearProgressIndicator(
+                        progress = { state.progress / 100f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.outline
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+        }
+
+        is UpdateUiState.ReadyToInstall -> Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = GivySurfaceVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Update siap dipasang",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = { onInstallClick(state.filePath) },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Install", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+
+        is UpdateUiState.Error -> Unit // stay quiet — this is a background check, not worth interrupting the user
     }
 }
 
