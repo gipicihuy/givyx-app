@@ -23,10 +23,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -170,11 +170,11 @@ fun GivyDownloaderScreen(viewModel: DownloadViewModel = viewModel()) {
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                        Icon(imageVector = Icons.Filled.Download, contentDescription = null)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isResolving) "Mencari..." else "Cari Video",
+                        text = if (isResolving) "Memproses..." else "Ambil Video",
                         style = MaterialTheme.typography.labelLarge
                     )
                 }

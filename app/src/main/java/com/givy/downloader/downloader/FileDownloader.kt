@@ -7,12 +7,18 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
 import java.io.OutputStream
+import java.io.RandomAccessFile
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Result of a completed (or failed) download.
@@ -29,6 +35,13 @@ sealed class DownloadResult {
  * Fully independent from any scraper: it only ever sees the plain URL that a
  * [com.givy.downloader.scraper.ScraperResult.Success] produced. It has zero
  * knowledge of TikTok, HTML, or how that URL was obtained.
+ *
+ * Speed: when the server supports HTTP range requests (most video CDNs do),
+ * the file is split into [PARALLEL_CONNECTIONS] chunks and downloaded
+ * concurrently to a temp file — the same trick dedicated download managers
+ * use — then copied into shared storage in one fast local disk-to-disk pass.
+ * Falls back to a single streamed connection if range requests aren't
+ * supported or anything about the split path fails.
  */
 class FileDownloader(private val context: Context) {
 
@@ -45,8 +58,7 @@ class FileDownloader(private val context: Context) {
      * @param isAudioOnly if true, saves under Music/Givy with a .mp3 fallback
      *                     extension; otherwise Movies/Givy with .mp4 fallback.
      * @param onProgress called on a background thread with a value in 0..100,
-     *                    or -1 if the server didn't report a content length
-     *                    (indeterminate progress).
+     *                    or -1 if progress can't be determined yet.
      */
     suspend fun download(
         url: String,
@@ -54,58 +66,166 @@ class FileDownloader(private val context: Context) {
         isAudioOnly: Boolean = false,
         onProgress: (Int) -> Unit = {}
     ): DownloadResult = withContext(Dispatchers.IO) {
+        val tempFile = File(context.cacheDir, "givy_dl_${System.currentTimeMillis()}.tmp")
         try {
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext DownloadResult.Error(
-                        "Server balas error ${response.code} saat mengunduh file."
-                    )
+            val probe = probeServer(url)
+
+            val downloadedOk = if (probe != null && probe.acceptsRanges && probe.contentLength >= MIN_SIZE_FOR_PARALLEL) {
+                runCatching {
+                    downloadInParallel(url, tempFile, probe.contentLength, onProgress)
+                }.getOrElse {
+                    // Fall back to a plain sequential stream if the split download
+                    // fails for any reason (flaky range support, server hiccup, etc.)
+                    downloadSequential(url, tempFile, probe.contentLength, onProgress)
                 }
-
-                val body = response.body ?: return@withContext DownloadResult.Error(
-                    "Response kosong dari server."
-                )
-
-                val contentType = body.contentType()?.toString().orEmpty()
-                val extension = guessExtension(contentType, isAudioOnly)
-                val safeName = sanitizeFileName(fileName) + extension
-
-                val resolvedUri = createMediaStoreEntry(safeName, isAudioOnly, contentType)
-                    ?: return@withContext DownloadResult.Error(
-                        "Gagal membuat entri file di storage."
-                    )
-
-                val totalBytes = body.contentLength()
-                var bytesCopied = 0L
-
-                context.contentResolver.openOutputStream(resolvedUri)?.use { output: OutputStream ->
-                    body.byteStream().use { input ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
-                            bytesCopied += bytesRead
-                            if (totalBytes > 0) {
-                                val percent = ((bytesCopied * 100) / totalBytes).toInt()
-                                onProgress(percent.coerceIn(0, 100))
-                            } else {
-                                onProgress(-1)
-                            }
-                        }
-                    }
-                } ?: return@withContext DownloadResult.Error(
-                    "Tidak bisa menulis ke storage (izin ditolak?)."
-                )
-
-                finalizePending(resolvedUri)
-                DownloadResult.Success(resolvedUri, safeName)
+            } else {
+                downloadSequential(url, tempFile, probe?.contentLength ?: -1L, onProgress)
             }
+
+            if (!downloadedOk || !tempFile.exists() || tempFile.length() == 0L) {
+                return@withContext DownloadResult.Error("Gagal mengunduh file (koneksi terputus atau file kosong).")
+            }
+
+            val contentType = probe?.contentType.orEmpty()
+            val extension = guessExtension(contentType, isAudioOnly)
+            val safeName = sanitizeFileName(fileName) + extension
+
+            val resolvedUri = createMediaStoreEntry(safeName, isAudioOnly, contentType)
+                ?: return@withContext DownloadResult.Error("Gagal membuat entri file di storage.")
+
+            context.contentResolver.openOutputStream(resolvedUri)?.use { output: OutputStream ->
+                tempFile.inputStream().use { input -> input.copyTo(output, bufferSize = COPY_BUFFER_BYTES) }
+            } ?: return@withContext DownloadResult.Error("Tidak bisa menulis ke storage (izin ditolak?).")
+
+            finalizePending(resolvedUri)
+            DownloadResult.Success(resolvedUri, safeName)
         } catch (e: IOException) {
             DownloadResult.Error("Koneksi gagal: ${e.message ?: "unknown network error"}", e)
         } catch (e: Exception) {
             DownloadResult.Error("Gagal mengunduh: ${e.message ?: "unknown error"}", e)
+        } finally {
+            tempFile.delete()
         }
+    }
+
+    private data class ServerProbe(
+        val contentLength: Long,
+        val acceptsRanges: Boolean,
+        val contentType: String
+    )
+
+    /** Cheap request to learn size/range-support before deciding the download strategy. */
+    private fun probeServer(url: String): ServerProbe? {
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("Range", "bytes=0-0")
+                .build()
+            client.newCall(request).execute().use { response ->
+                val contentType = response.header("Content-Type").orEmpty()
+                val acceptsRanges = response.code == 206 ||
+                    response.header("Accept-Ranges")?.contains("bytes", ignoreCase = true) == true
+                val total = response.header("Content-Range")
+                    ?.substringAfterLast("/")
+                    ?.toLongOrNull()
+                    ?: response.body?.contentLength()?.takeIf { it > 0 }
+                    ?: -1L
+                ServerProbe(contentLength = total, acceptsRanges = acceptsRanges, contentType = contentType)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Splits the file into concurrent range-request chunks for higher throughput. */
+    private suspend fun downloadInParallel(
+        url: String,
+        outFile: File,
+        totalBytes: Long,
+        onProgress: (Int) -> Unit
+    ): Boolean = coroutineScope {
+        RandomAccessFile(outFile, "rw").use { raf -> raf.setLength(totalBytes) }
+
+        val chunkSize = totalBytes / PARALLEL_CONNECTIONS
+        val downloaded = AtomicLong(0L)
+
+        val jobs = (0 until PARALLEL_CONNECTIONS).map { index ->
+            val start = index * chunkSize
+            val end = if (index == PARALLEL_CONNECTIONS - 1) totalBytes - 1 else (start + chunkSize - 1)
+            async(Dispatchers.IO) {
+                downloadRange(url, outFile, start, end) { bytesJustRead ->
+                    val soFar = downloaded.addAndGet(bytesJustRead)
+                    onProgress(((soFar * 100) / totalBytes).toInt().coerceIn(0, 100))
+                }
+            }
+        }
+
+        jobs.awaitAll().all { it }
+    }
+
+    private fun downloadRange(
+        url: String,
+        outFile: File,
+        start: Long,
+        end: Long,
+        onBytesRead: (Long) -> Unit
+    ): Boolean {
+        val request = Request.Builder()
+            .url(url)
+            .header("Range", "bytes=$start-$end")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return false
+            val body = response.body ?: return false
+
+            RandomAccessFile(outFile, "rw").use { raf ->
+                raf.seek(start)
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(COPY_BUFFER_BYTES)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        raf.write(buffer, 0, read)
+                        onBytesRead(read.toLong())
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    /** Plain single-connection streamed download — the reliable fallback path. */
+    private fun downloadSequential(
+        url: String,
+        outFile: File,
+        knownTotalBytes: Long,
+        onProgress: (Int) -> Unit
+    ): Boolean {
+        val request = Request.Builder().url(url).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return false
+            val body = response.body ?: return false
+
+            val totalBytes = knownTotalBytes.takeIf { it > 0 } ?: body.contentLength()
+            var bytesCopied = 0L
+
+            outFile.outputStream().use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(COPY_BUFFER_BYTES)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        bytesCopied += read
+                        if (totalBytes > 0) {
+                            onProgress(((bytesCopied * 100) / totalBytes).toInt().coerceIn(0, 100))
+                        } else {
+                            onProgress(-1)
+                        }
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private fun createMediaStoreEntry(
@@ -139,8 +259,8 @@ class FileDownloader(private val context: Context) {
             } else {
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
             }
-            val givyDir = java.io.File(dir, "Givy").apply { if (!exists()) mkdirs() }
-            values.put(MediaStore.MediaColumns.DATA, java.io.File(givyDir, fileName).absolutePath)
+            val givyDir = File(dir, "Givy").apply { if (!exists()) mkdirs() }
+            values.put(MediaStore.MediaColumns.DATA, File(givyDir, fileName).absolutePath)
             collection = if (isAudioOnly) {
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
             } else {
@@ -174,5 +294,11 @@ class FileDownloader(private val context: Context) {
         return withoutExtension.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank {
             "givy_${System.currentTimeMillis()}"
         }
+    }
+
+    private companion object {
+        const val PARALLEL_CONNECTIONS = 4
+        const val MIN_SIZE_FOR_PARALLEL = 2 * 1024 * 1024L // 2 MB — below this, splitting isn't worth the overhead
+        const val COPY_BUFFER_BYTES = 64 * 1024 // 64 KB — fewer syscalls than the previous 8 KB default
     }
 }
