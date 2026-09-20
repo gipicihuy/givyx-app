@@ -5,29 +5,40 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Wide letter-spacing on headline/label styles echoes the uppercase,
-// tracked-out headings and buttons used across Mori's UI.
 val GivyTypography = Typography(
     headlineMedium = TextStyle(
         fontWeight = FontWeight.Bold,
-        fontSize = 26.sp,
-        letterSpacing = 2.sp
+        fontSize = 24.sp,
+        letterSpacing = 3.sp
     ),
     titleMedium = TextStyle(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp
+        fontSize = 16.sp,
+        letterSpacing = 0.5.sp
     ),
     bodyLarge = TextStyle(
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp
+        fontSize = 16.sp,
+        letterSpacing = 0.25.sp
     ),
     bodyMedium = TextStyle(
         fontWeight = FontWeight.Normal,
-        fontSize = 14.sp
+        fontSize = 14.sp,
+        letterSpacing = 0.25.sp
+    ),
+    bodySmall = TextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        letterSpacing = 0.4.sp
     ),
     labelLarge = TextStyle(
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
+        letterSpacing = 1.5.sp
+    ),
+    labelMedium = TextStyle(
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 12.sp,
         letterSpacing = 1.sp
     )
 )

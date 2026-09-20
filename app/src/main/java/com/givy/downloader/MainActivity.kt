@@ -4,14 +4,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,7 +26,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -37,6 +44,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,6 +103,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GivyDownloaderScreen(
     viewModel: DownloadViewModel = viewModel(),
@@ -120,10 +129,10 @@ fun GivyDownloaderScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             UpdateBanner(
                 state = updateState,
@@ -132,128 +141,243 @@ fun GivyDownloaderScreen(
                 onDismiss = { updateViewModel.dismiss() }
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            BrandMark()
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "GIVY DOWNLOADER",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Tempel link TikTok, pilih kualitas, unduh.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = GivyOnSurfaceMuted
-            )
+            BrandHeader()
 
             Spacer(modifier = Modifier.height(32.dp))
 
             SectionLabel(text = "TAUTAN TIKTOK")
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedTextField(
+            UrlInput(
                 value = url,
                 onValueChange = { url = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("https://www.tiktok.com/@user/video/...") },
-                leadingIcon = {
-                    Icon(imageVector = Icons.Outlined.Link, contentDescription = null)
-                },
-                trailingIcon = {
-                    if (url.isNotEmpty() && !isBusy) {
-                        IconButton(onClick = { url = "" }) {
-                            Icon(imageVector = Icons.Outlined.Clear, contentDescription = "Bersihkan")
-                        }
-                    }
-                },
-                singleLine = true,
-                enabled = !isBusy,
-                shape = RoundedCornerShape(4.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = GivySurface,
-                    unfocusedContainerColor = GivySurface,
-                    disabledContainerColor = GivySurface,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
-                textStyle = MaterialTheme.typography.bodyLarge
+                onClear = { url = "" },
+                enabled = !isBusy
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
+            AnalyzeButton(
                 onClick = { viewModel.resolveLink(url) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
                 enabled = !isBusy && url.isNotBlank(),
-                shape = RoundedCornerShape(4.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isResolving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(imageVector = Icons.Outlined.Download, contentDescription = null)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isResolving) "MEMPROSES..." else "AMBIL VIDEO",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            StatusPanel(
-                uiState = uiState,
-                onDismiss = { viewModel.reset() },
-                onPickOption = { option, title -> viewModel.downloadOption(option, title) }
+                isResolving = isResolving
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            AnimatedVisibility(
+                visible = uiState !is DownloadUiState.Idle,
+                enter = slideInVertically(initialOffsetY = { it / 4 }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it / 4 }) + fadeOut()
+            ) {
+                StatusPanel(
+                    uiState = uiState,
+                    onDismiss = { viewModel.reset() },
+                    onPickOption = { option, title -> viewModel.downloadOption(option, title) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            SectionLabel(text = "DIDUKUNG")
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SupportedPlatforms()
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
-/** Small bordered square mark used as the app's identity above the title, echoing Mori's minimal wordmark header. */
 @Composable
-private fun BrandMark() {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)),
-        contentAlignment = Alignment.Center
+private fun BrandHeader() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .border(
+                    width = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(4.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "G",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
-            text = "G",
+            text = "GIVY DOWNLOADER",
             style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onBackground,
+            letterSpacing = 3.sp
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = "Tempel link TikTok, pilih kualitas, unduh.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = GivyOnSurfaceMuted
         )
     }
 }
 
-/** Small uppercase, tracked-out caption used above form sections — mirrors Mori's structured, labeled sections. */
 @Composable
 private fun SectionLabel(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium.copy(letterSpacing = 2.sp),
+        style = MaterialTheme.typography.bodyMedium.copy(
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.SemiBold
+        ),
         color = GivyOnSurfaceMuted,
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+@Composable
+private fun UrlInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onClear: () -> Unit,
+    enabled: Boolean
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = {
+            Text(
+                "https://www.tiktok.com/@user/video/...",
+                color = GivyOnSurfaceMuted
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Outlined.Link,
+                contentDescription = null,
+                tint = GivyOnSurfaceMuted
+            )
+        },
+        trailingIcon = {
+            if (value.isNotEmpty() && enabled) {
+                IconButton(onClick = onClear) {
+                    Icon(
+                        imageVector = Icons.Outlined.Clear,
+                        contentDescription = "Bersihkan",
+                        tint = GivyOnSurfaceMuted
+                    )
+                }
+            }
+        },
+        singleLine = true,
+        enabled = enabled,
+        shape = RoundedCornerShape(4.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = GivySurface,
+            unfocusedContainerColor = GivySurface,
+            disabledContainerColor = GivySurface,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            disabledBorderColor = MaterialTheme.colorScheme.outline,
+            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+            disabledTextColor = MaterialTheme.colorScheme.onBackground
+        ),
+        textStyle = MaterialTheme.typography.bodyLarge
+    )
+}
+
+@Composable
+private fun AnalyzeButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    isResolving: Boolean
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        enabled = enabled,
+        shape = RoundedCornerShape(4.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isResolving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(imageVector = Icons.Outlined.Download, contentDescription = null)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (isResolving) "MEMPROSES..." else "AMBIL VIDEO",
+                style = MaterialTheme.typography.labelLarge,
+                letterSpacing = 1.5.sp
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SupportedPlatforms() {
+    val platforms = listOf(
+        "TikTok" to Icons.Outlined.VideoFile
+    )
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        platforms.forEach { (name, icon) ->
+            Surface(
+                modifier = Modifier,
+                shape = RoundedCornerShape(4.dp),
+                color = GivySurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -300,7 +424,11 @@ private fun UpdateBanner(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(4.dp)
                 ) {
-                    Text("UPDATE", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        "UPDATE",
+                        style = MaterialTheme.typography.labelLarge,
+                        letterSpacing = 1.5.sp
+                    )
                 }
             }
         }
@@ -321,13 +449,17 @@ private fun UpdateBanner(
                 if (state.progress >= 0) {
                     LinearProgressIndicator(
                         progress = { state.progress / 100f },
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.outline
                     )
                 } else {
                     LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.outline
                     )
@@ -357,12 +489,16 @@ private fun UpdateBanner(
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    Text("INSTALL", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        "INSTALL",
+                        style = MaterialTheme.typography.labelLarge,
+                        letterSpacing = 1.5.sp
+                    )
                 }
             }
         }
 
-        is UpdateUiState.Error -> Unit // stay quiet — this is a background check, not worth interrupting the user
+        is UpdateUiState.Error -> Unit
     }
 }
 
@@ -411,21 +547,26 @@ private fun StatusPanel(
                         progress = { uiState.progress / 100f },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp),
+                            .height(6.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.outline
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "${uiState.progress}%",
-                        color = GivyOnSurfaceMuted,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${uiState.progress}%",
+                            color = GivyOnSurfaceMuted,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 } else {
                     LinearProgressIndicator(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp),
+                            .height(6.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.outline
                     )
@@ -434,9 +575,17 @@ private fun StatusPanel(
         }
 
         is DownloadUiState.Success -> StatusCard(accentColor = GivySuccess) {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null, tint = GivySuccess)
+                    Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = GivySuccess
+                    )
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
                             text = "Berhasil disimpan",
@@ -460,9 +609,17 @@ private fun StatusPanel(
         }
 
         is DownloadUiState.Error -> StatusCard(accentColor = GivyError) {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Outlined.ErrorOutline, contentDescription = null, tint = GivyError)
+                    Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = GivyError
+                    )
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
                             text = "Gagal",
@@ -485,12 +642,6 @@ private fun StatusPanel(
     }
 }
 
-/**
- * Media card redesigned as a vertical stack — full-width thumbnail on top
- * (with a floating close button, like Mori's .media-card / .close-card),
- * title + meta beneath it, then a labeled, full-width list of quality
- * options. Replaces the old side-by-side thumbnail+text row layout.
- */
 @Composable
 private fun PreviewCard(
     title: String,
@@ -509,7 +660,7 @@ private fun PreviewCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(220.dp)
                     .background(GivySurfaceVariant)
             ) {
                 if (thumbnailUrl != null) {
@@ -554,10 +705,20 @@ private fun PreviewCard(
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline,
+                    thickness = 1.dp
+                )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                SectionLabel(text = "PILIH KUALITAS")
+                Text(
+                    text = "PILIH KUALITAS",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = GivyOnSurfaceMuted
+                )
                 Spacer(modifier = Modifier.height(10.dp))
 
                 options.forEach { option ->
@@ -580,7 +741,11 @@ private fun PreviewCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = option.label, modifier = Modifier.weight(1f))
+                        Text(
+                            text = option.label,
+                            modifier = Modifier.weight(1f),
+                            letterSpacing = 0.5.sp
+                        )
                     }
                 }
             }
@@ -588,11 +753,6 @@ private fun PreviewCard(
     }
 }
 
-/**
- * Status card with a solid accent stripe on the leading edge instead of a
- * tinted border, keeping the card body itself monochrome — consistent with
- * Mori's flat, high-contrast surfaces where color is used sparingly.
- */
 @Composable
 private fun StatusCard(
     accentColor: Color,
