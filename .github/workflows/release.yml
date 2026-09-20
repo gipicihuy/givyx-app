@@ -158,22 +158,27 @@ jobs:
 
       - name: Download APK artifact
         if: steps.version.outputs.skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v6
         with:
           name: givy-downloader-release-apk
           path: apk/
+          workflow: build.yml
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true  # May fail if build was for a PR (no release artifact)
 
       - name: Check artifact exists
         id: artifact
         if: steps.version.outputs.skip != 'true'
         run: |
-          if [ -f "apk/*.apk" ] 2>/dev/null || ls apk/*.apk 1>/dev/null 2>&1; then
+          APK=$(find apk/ -name "*.apk" -type f 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "APK artifact found"
+            echo "apk_path=$APK" >> $GITHUB_OUTPUT
+            echo "APK found: $APK"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "No APK artifact found — skipping release creation"
+            echo "No APK found in apk/ — skipping release creation"
+            ls -la apk/ 2>/dev/null || echo "apk/ directory does not exist"
           fi
 
       - name: Create GitHub Release
@@ -185,4 +190,4 @@ jobs:
           body: ${{ steps.changelog.outputs.changelog }}
           prerelease: false
           make_latest: "true"
-          files: apk/*.apk
+          files: ${{ steps.artifact.outputs.apk_path }}
