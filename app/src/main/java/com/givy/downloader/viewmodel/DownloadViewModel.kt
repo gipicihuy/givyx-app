@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.givy.downloader.downloader.DownloadResult
 import com.givy.downloader.downloader.FileDownloader
+import com.givy.downloader.scraper.FacebookScraper
 import com.givy.downloader.scraper.MediaOption
 import com.givy.downloader.scraper.ScraperProvider
 import com.givy.downloader.scraper.ScraperResult
@@ -35,7 +36,8 @@ sealed class DownloadUiState {
 
 class DownloadViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val scraper = ScraperProvider.get()
+    private val tiktokScraper = ScraperProvider.get()
+    private val facebookScraper = FacebookScraper()
     private val downloader = FileDownloader(application)
 
     private val _uiState = MutableStateFlow<DownloadUiState>(DownloadUiState.Idle)
@@ -55,10 +57,26 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        val isFacebook = facebookScraper.isFacebookUrl(url)
+        val isTikTok = url.contains("tiktok.com")
+
+        if (!isFacebook && !isTikTok) {
+            _uiState.value = DownloadUiState.Error(
+                "URL tidak dikenali. Mendukung TikTok dan Facebook."
+            )
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = DownloadUiState.Resolving
 
-            _uiState.value = when (val result = scraper.resolve(url)) {
+            val result = if (isFacebook) {
+                facebookScraper.resolve(url)
+            } else {
+                tiktokScraper.resolve(url)
+            }
+
+            _uiState.value = when (result) {
                 is ScraperResult.Error -> DownloadUiState.Error(result.message)
                 is ScraperResult.Success -> DownloadUiState.Preview(
                     title = result.title,
