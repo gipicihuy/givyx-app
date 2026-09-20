@@ -57,10 +57,10 @@ class FileDownloader(private val context: Context) {
      * @param fileName desired file name, without extension is fine.
      * @param isAudioOnly if true, falls back to a .mp3 extension when the
      *                     content type is ambiguous; otherwise falls back to
-     *                     .mp4. Doesn't affect where the file is saved —
-     *                     everything goes to Download/Givy/tiktok.
+     *                     .mp4.
      * @param isImage if true, this is a single slideshow photo — falls back
      *                 to a .jpg extension instead of .mp4/.mp3.
+     * @param isSpotify if true, saves to Music/Givy instead of Downloads/Givy/tiktok.
      * @param onProgress called on a background thread with a value in 0..100,
      *                    or -1 if progress can't be determined yet.
      */
@@ -69,6 +69,7 @@ class FileDownloader(private val context: Context) {
         fileName: String,
         isAudioOnly: Boolean = false,
         isImage: Boolean = false,
+        isSpotify: Boolean = false,
         onProgress: (Int) -> Unit = {}
     ): DownloadResult = withContext(Dispatchers.IO) {
         val tempFile = File(context.cacheDir, "givy_dl_${System.currentTimeMillis()}.tmp")
@@ -95,7 +96,7 @@ class FileDownloader(private val context: Context) {
             val extension = guessExtension(contentType, isAudioOnly, isImage)
             val safeName = sanitizeFileName(fileName) + extension
 
-            val resolvedUri = createMediaStoreEntry(safeName, contentType)
+            val resolvedUri = createMediaStoreEntry(safeName, contentType, isSpotify)
                 ?: return@withContext DownloadResult.Error("Gagal membuat entri file di storage.")
 
             context.contentResolver.openOutputStream(resolvedUri)?.use { output: OutputStream ->
@@ -233,35 +234,47 @@ class FileDownloader(private val context: Context) {
         return true
     }
 
-    /** Creates a pending entry in the device's shared Downloads folder for both video and audio files. */
+    /** Creates a pending entry in the device's shared storage. */
     private fun createMediaStoreEntry(
         fileName: String,
-        mimeType: String
+        mimeType: String,
+        isSpotify: Boolean
     ): Uri? {
+        val subfolder = if (isSpotify) "Givy/spotify" else "Givy/tiktok"
+        val collection = if (isSpotify) {
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        } else {
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        }
+
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             if (mimeType.isNotBlank()) put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
         }
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // MediaStore.Downloads is the proper collection for arbitrary
-            // downloaded files (video, audio, or photo) landing in the
-            // Downloads folder — unlike Video.Media/Audio.Media, it isn't
-            // tied to a specific media type, so .mp4/.mp3/.jpg all end up
-            // under the same Download/Givy/tiktok folder the user expects.
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Givy/tiktok")
+            if (isSpotify) {
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Music/$subfolder")
+            } else {
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$subfolder")
+            }
             values.put(MediaStore.MediaColumns.IS_PENDING, 1)
-            context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            context.contentResolver.insert(collection, values)
         } else {
-            // Pre-Q: no MediaStore.Downloads collection exists yet, so write
-            // straight to Download/Givy/tiktok and register it via the
-            // generic Files collection so it still shows up everywhere.
             @Suppress("DEPRECATION")
-            val downloadsDir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "Givy/tiktok"
-            ).apply { if (!exists()) mkdirs() }
-            values.put(MediaStore.MediaColumns.DATA, File(downloadsDir, fileName).absolutePath)
+            val dir = if (isSpotify) {
+                File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                    subfolder
+                )
+            } else {
+                File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    subfolder
+                )
+            }.apply { if (!exists()) mkdirs() }
+
+            values.put(MediaStore.MediaColumns.DATA, File(dir, fileName).absolutePath)
             context.contentResolver.insert(MediaStore.Files.getContentUri("external"), values)
         }
     }

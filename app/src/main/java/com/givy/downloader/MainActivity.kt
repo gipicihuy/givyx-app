@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.VideoFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -145,7 +146,7 @@ fun GivyDownloaderScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            SectionLabel(text = "TAUTAN TIKTOK")
+            SectionLabel(text = "TAUTAN")
             Spacer(modifier = Modifier.height(10.dp))
 
             UrlInput(
@@ -224,7 +225,7 @@ private fun BrandHeader() {
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Tempel link TikTok, pilih kualitas, unduh.",
+            text = "Tempel link TikTok atau Spotify, pilih kualitas, unduh.",
             style = MaterialTheme.typography.bodyMedium,
             color = GivyOnSurfaceMuted
         )
@@ -257,7 +258,7 @@ private fun UrlInput(
         modifier = Modifier.fillMaxWidth(),
         placeholder = {
             Text(
-                "https://www.tiktok.com/@user/video/...",
+                "https://open.spotify.com/track/... atau tiktok.com/...",
                 color = GivyOnSurfaceMuted
             )
         },
@@ -329,7 +330,7 @@ private fun AnalyzeButton(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (isResolving) "MEMPROSES..." else "AMBIL VIDEO",
+                text = if (isResolving) "MEMPROSES..." else "AMBIL MEDIA",
                 style = MaterialTheme.typography.labelLarge,
                 letterSpacing = 1.5.sp
             )
@@ -341,7 +342,8 @@ private fun AnalyzeButton(
 @Composable
 private fun SupportedPlatforms() {
     val platforms = listOf(
-        "TikTok" to Icons.Outlined.VideoFile
+        "TikTok" to Icons.Outlined.VideoFile,
+        "Spotify" to Icons.Outlined.MusicNote
     )
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -516,7 +518,7 @@ private fun StatusPanel(
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Mengambil info video dari link kamu...",
+                    text = "Mengambil info media dari link kamu...",
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.bodyMedium
                 )

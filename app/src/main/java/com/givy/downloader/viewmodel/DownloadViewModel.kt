@@ -9,6 +9,7 @@ import com.givy.downloader.downloader.FileDownloader
 import com.givy.downloader.scraper.MediaOption
 import com.givy.downloader.scraper.ScraperProvider
 import com.givy.downloader.scraper.ScraperResult
+import com.givy.downloader.scraper.SpotifyScraper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,13 +36,17 @@ sealed class DownloadUiState {
 
 class DownloadViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Swap ScraperProvider.get() for your own implementation once it's ready —
-    // nothing here needs to change.
-    private val scraper = ScraperProvider.get()
+    private val tiktokScraper = ScraperProvider.get()
+    private val spotifyScraper = SpotifyScraper()
     private val downloader = FileDownloader(application)
 
     private val _uiState = MutableStateFlow<DownloadUiState>(DownloadUiState.Idle)
     val uiState: StateFlow<DownloadUiState> = _uiState.asStateFlow()
+
+    /** Auto-detected platform type for UI hints. */
+    private var detectedPlatform: Platform = Platform.Unknown
+
+    enum class Platform { TikTok, Spotify, Unknown }
 
     /** Step 1: resolve the link into a preview + list of quality options. */
     fun resolveLink(rawUrl: String) {
@@ -52,14 +57,32 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             return
         }
         if (!isLikelyUrl(url)) {
-            _uiState.value = DownloadUiState.Error("URL tidak valid. Pastikan link TikTok lengkap (https://...).")
+            _uiState.value = DownloadUiState.Error(
+                "URL tidak valid. Paste link TikTok atau Spotify yang lengkap (https://...)."
+            )
             return
+        }
+
+        // Auto-detect platform
+        detectedPlatform = when {
+            spotifyScraper.isSpotifyUrl(url) -> Platform.Spotify
+            url.contains("tiktok.com") -> Platform.TikTok
+            else -> Platform.Unknown
         }
 
         viewModelScope.launch {
             _uiState.value = DownloadUiState.Resolving
 
-            _uiState.value = when (val result = scraper.resolve(url)) {
+            val result = when (detectedPlatform) {
+                Platform.Spotify -> spotifyScraper.resolve(url)
+                Platform.TikTok -> tiktokScraper.resolve(url)
+                Platform.Unknown -> {
+                    // Try TikTok as fallback
+                    tiktokScraper.resolve(url)
+                }
+            }
+
+            _uiState.value = when (result) {
                 is ScraperResult.Error -> DownloadUiState.Error(result.message)
                 is ScraperResult.Success -> DownloadUiState.Preview(
                     title = result.title,
@@ -89,7 +112,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                 url = option.mediaUrl,
                 fileName = fileName,
                 isAudioOnly = option.isAudioOnly,
-                isImage = option.isImage
+                isImage = option.isImage,
+                isSpotify = detectedPlatform == Platform.Spotify
             ) { progress ->
                 _uiState.value = DownloadUiState.Downloading(progress = progress, optionLabel = option.label)
             }
