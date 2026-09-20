@@ -1,0 +1,194 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+    branches: [main]
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Only run when the build succeeded (or when manually dispatched)
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for commit analysis
+
+      - name: Determine version bump
+        id: version
+        run: |
+          # Find the last versioned tag ( vX.Y.Z format, excluding 'latest')
+          LAST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LAST_TAG" ]; then
+            # No version tag yet — start at v1.0.0
+            MAJOR=1
+            MINOR=0
+            PATCH=0
+            echo "No previous version found, starting at v1.0.0"
+          else
+            echo "Last version tag: $LAST_TAG"
+            # Parse current version
+            VERSION=${LAST_TAG#v}
+            MAJOR=$(echo "$VERSION" | cut -d. -f1)
+            MINOR=$(echo "$VERSION" | cut -d. -f2)
+            PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+            # Get commits since last tag
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s" --no-merges)
+
+            if [ -z "$COMMITS" ]; then
+              echo "No commits since $LAST_TAG — skipping release"
+              echo "skip=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            echo "Commits since $LAST_TAG:"
+            echo "$COMMITS"
+            echo ""
+
+            # Check for version bump keywords
+            HAS_BREAKING=$(echo "$COMMITS" | grep -iE "^[a-z]+(\(.+\))?!:|BREAKING CHANGE" || true)
+            HAS_FEATURE=$(echo "$COMMITS" | grep -iE "^feat(\(.+\))?" || true)
+            HAS_FIX=$(echo "$COMMITS" | grep -iE "^fix(\(.+\))?" || true)
+
+            # Also check for non-release commits (ci, build, chore, docs, style, refactor, test)
+            HAS_RELEASE_COMMIT=$(echo "$COMMITS" | grep -iE "^(feat|fix|perf|refactor)(\(.+\))?:" || true)
+
+            if [ -z "$HAS_RELEASE_COMMIT" ]; then
+              echo "No app-changing commits (feat/fix/perf/refactor) — skipping release"
+              echo "skip=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            if [ -n "$HAS_BREAKING" ]; then
+              echo "Breaking change detected → bump MAJOR"
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+            elif [ -n "$HAS_FEATURE" ]; then
+              echo "New feature detected → bump MINOR"
+              MINOR=$((MINOR + 1))
+              PATCH=0
+            elif [ -n "$HAS_FIX" ]; then
+              echo "Bug fix detected → bump PATCH"
+              PATCH=$((PATCH + 1))
+            else
+              echo "Other app changes → bump PATCH"
+              PATCH=$((PATCH + 1))
+            fi
+          fi
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "patch=$PATCH" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          # Find the last versioned tag
+          LAST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          NEW_VERSION="${{ steps.version.outputs.version }}"
+
+          {
+            echo "changelog<<CHANGELOG_EOF"
+
+            if [ -z "$LAST_TAG" ]; then
+              echo "## What's Changed"
+              echo ""
+              echo "Initial release 🎉"
+              echo ""
+              git log --pretty=format:"- %s (%h)" --no-merges | head -20
+            else
+              echo "## What's Changed since $LAST_TAG"
+              echo ""
+
+              # Group commits by type
+              FEATURES=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | grep -iE "^- feat" || true)
+              FIXES=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | grep -iE "^- fix" || true)
+              OTHER=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges | grep -viE "^- (feat|fix)" || true)
+
+              if [ -n "$FEATURES" ]; then
+                echo "### ✨ Features"
+                echo "$FEATURES"
+                echo ""
+              fi
+
+              if [ -n "$FIXES" ]; then
+                echo "### 🐛 Bug Fixes"
+                echo "$FIXES"
+                echo ""
+              fi
+
+              if [ -n "$OTHER" ]; then
+                echo "### 📦 Other Changes"
+                echo "$OTHER"
+                echo ""
+              fi
+            fi
+
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG:-$(git rev-list --max-parents=0 HEAD | head -1)}...${NEW_VERSION}"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create Git tag
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+          echo "Tag $VERSION created and pushed"
+
+      - name: Download APK artifact
+        if: steps.version.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: givy-downloader-release-apk
+          path: apk/
+        continue-on-error: true  # May fail if build was for a PR (no release artifact)
+
+      - name: Check artifact exists
+        id: artifact
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          if [ -f "apk/*.apk" ] 2>/dev/null || ls apk/*.apk 1>/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "APK artifact found"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "No APK artifact found — skipping release creation"
+          fi
+
+      - name: Create Git tag
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+          echo "Tag $VERSION created and pushed"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.skip != 'true' && steps.artifact.outputs.exists == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Givy Downloader ${{ steps.version.outputs.version }}"
+          body: ${{ steps.changelog.outputs.changelog }}
+          prerelease: false
+          make_latest: true
+          files: apk/*.apk

@@ -27,8 +27,15 @@ android {
         applicationId = "com.givy.downloader"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+
+        // Version is set from the -PversionName property passed by CI (from git tag).
+        // Falls back to "1.0.0-dev" for local builds.
+        val tagVersion = (project.findProperty("versionName") as String?) ?: "1.0.0-dev"
+        val versionParts = tagVersion.removePrefix("v").split(".")
+        versionCode = (versionParts.getOrElse(0) { "1" }.toIntOrNull() ?: 1) * 10000 +
+                (versionParts.getOrElse(1) { "0" }.toIntOrNull() ?: 0) * 100 +
+                (versionParts.getOrElse(2) { "0" }.toIntOrNull() ?: 0)
+        versionName = tagVersion.removePrefix("v")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
