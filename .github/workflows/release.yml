@@ -184,5 +184,5 @@ jobs:
           name: "Givy Downloader ${{ steps.version.outputs.version }}"
           body: ${{ steps.changelog.outputs.changelog }}
           prerelease: false
-          make_latest: true
+          make_latest: "true"
           files: apk/*.apk
