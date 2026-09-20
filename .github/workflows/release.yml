@@ -150,6 +150,8 @@ jobs:
         if: steps.version.outputs.skip != 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
           echo "Tag $VERSION created and pushed"
@@ -173,14 +175,6 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
             echo "No APK artifact found — skipping release creation"
           fi
-
-      - name: Create Git tag
-        if: steps.version.outputs.skip != 'true'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          git tag -a "$VERSION" -m "Release $VERSION"
-          git push origin "$VERSION"
-          echo "Tag $VERSION created and pushed"
 
       - name: Create GitHub Release
         if: steps.version.outputs.skip != 'true' && steps.artifact.outputs.exists == 'true'
