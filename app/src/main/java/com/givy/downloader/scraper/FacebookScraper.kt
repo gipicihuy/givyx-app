@@ -78,12 +78,13 @@ class FacebookScraper {
             .post(payload.toRequestBody(mediaType))
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw Exception("Gagal menghubungi server: HTTP ${response.code}")
+        val response = client.newCall(request).execute()
+        response.use { resp ->
+            if (!resp.isSuccessful) {
+                throw Exception("Gagal menghubungi server: HTTP ${resp.code}")
             }
 
-            val body = response.body?.string().orEmpty()
+            val body = resp.body?.string().orEmpty()
             val json = try {
                 org.json.JSONObject(body)
             } catch (_: Exception) {
@@ -150,7 +151,7 @@ class FacebookScraper {
                 }
             }
 
-            ScraperResult.Success(
+            return ScraperResult.Success(
                 title = title,
                 thumbnailUrl = thumbnailUrl,
                 options = ordered
