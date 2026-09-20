@@ -33,24 +33,41 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses || true
 
+      - name: Decode release keystore
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > app/release.keystore
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      - name: Build release APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./gradlew assembleRelease --stacktrace -PgitSha=${{ github.sha }}
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Build debug APK (PRs)
+        if: github.event_name == 'pull_request'
         run: ./gradlew assembleDebug --stacktrace -PgitSha=${{ github.sha }}
 
-      - name: Upload APK artifact
+      - name: Upload release APK artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: givy-downloader-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload debug APK artifact (PRs)
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: givy-downloader-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      # Publishes the same APK to a public, no-login-required download link.
-      # Only runs on pushes to main (not on pull requests) so PRs can't
-      # publish a release. Reuses the tag "latest" every time, so the
-      # release page always has this one link with the newest build —
-      # nothing piles up, no manual versioning needed.
       - name: Publish/update 'latest' GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -58,9 +75,8 @@ jobs:
           tag_name: latest
           name: "Givy Downloader (latest build)"
           body: |
-            Auto-updated debug build from commit ${{ github.sha }}.
-            This is a debug APK, not a signed release build.
+            Auto-updated release build from commit ${{ github.sha }}.
+            Signed with a dedicated release key for Play Protect compatibility.
           prerelease: true
           make_latest: true
-          files: app/build/outputs/apk/debug/*.apk
-
+          files: app/build/outputs/apk/release/*.apk

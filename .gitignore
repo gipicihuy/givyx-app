@@ -19,3 +19,6 @@ local.properties
 
 # Log/cache
 *.log
+
+# Release keystore (stored in GitHub Secrets, never committed)
+app/release.keystore

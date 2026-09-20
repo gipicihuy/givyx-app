@@ -8,20 +8,18 @@ android {
     namespace = "com.givy.downloader"
     compileSdk = 34
 
-    // Fixed debug keystore committed at app/debug.keystore. Without this,
-    // Android Gradle Plugin falls back to an auto-generated debug key —
-    // and on GitHub Actions that key is regenerated fresh on every runner,
-    // so every "latest" build ends up signed differently. Installing a new
-    // build over an old one then fails with "package conflicts with an
-    // existing package" because the signatures don't match. Pinning one
-    // keystore here keeps every build (CI and local) signed identically,
-    // so in-app updates install cleanly over the previous version.
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = System.getenv("STORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("KEY_ALIAS") ?: ""
+            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
         }
     }
 
@@ -48,11 +46,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isMinifyEnabled = false
