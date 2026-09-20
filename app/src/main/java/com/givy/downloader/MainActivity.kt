@@ -38,8 +38,9 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.VideoFile
+import com.givy.downloader.ui.theme.FacebookIcon
+import com.givy.downloader.ui.theme.TikTokIcon
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -225,7 +226,7 @@ private fun BrandHeader() {
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Tempel link TikTok atau Spotify, pilih kualitas, unduh.",
+            text = "Tempel link TikTok atau Facebook, pilih kualitas, unduh.",
             style = MaterialTheme.typography.bodyMedium,
             color = GivyOnSurfaceMuted
         )
@@ -258,7 +259,7 @@ private fun UrlInput(
         modifier = Modifier.fillMaxWidth(),
         placeholder = {
             Text(
-                "https://open.spotify.com/track/... atau tiktok.com/...",
+                "https://www.tiktok.com/... atau facebook.com/...",
                 color = GivyOnSurfaceMuted
             )
         },
@@ -342,8 +343,8 @@ private fun AnalyzeButton(
 @Composable
 private fun SupportedPlatforms() {
     val platforms = listOf(
-        "TikTok" to Icons.Outlined.VideoFile,
-        "Spotify" to Icons.Outlined.MusicNote
+        "TikTok" to TikTokIcon,
+        "Facebook" to FacebookIcon
     )
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
