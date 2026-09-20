@@ -219,10 +219,4 @@ class FacebookScraper {
         }
     }
 
-    private fun String.toRequestBody(mediaType: String): okhttp3.RequestBody {
-        return okhttp3.RequestBody.Companion.toRequestBody(
-            this@toRequestBody,
-            mediaType
-        )
-    }
 }
