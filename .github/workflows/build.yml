@@ -35,7 +35,7 @@ jobs:
 
       - name: Decode release keystore
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > app/release.keystore
+        run: echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 -d > app/release.p12
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
